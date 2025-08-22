@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from "react";
 
 import { PRINT_COLOR_BASE, PRINT_COLOR_RAISED } from "../lib/constants";
-import { Settings } from "../lib/types";
+import { Settings, HolePosition } from '../lib/types';
 import Tooltip from "./ui/Tooltip";
 
 interface SettingsPanelProps {
@@ -262,6 +262,45 @@ function SettingsPanel({ settings, onSettingsChange, predefinedColors, onClose, 
               onChange={(e) => onSettingsChange({ enableSmoothing: e.target.checked })}
               className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
           </div>
+        </div>
+        <div className="space-y-2 border-t pt-4">
+          <h3 className="text-lg font-semibold text-gray-700">Keychain Hole</h3>
+          <div>
+            <label htmlFor="holePosition" className="block text-sm font-medium text-gray-600 mb-1">
+              Position
+            </label>
+            <select
+              id="holePosition"
+              value={settings.holePosition}
+              onChange={(e) => onSettingsChange({ holePosition: e.target.value as HolePosition })}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="none">None</option>
+              <option value="top-middle">Top Middle</option>
+              <option value="top-left">Top Left</option>
+              <option value="top-right">Top Right</option>
+            </select>
+          </div>
+
+          {settings.holePosition !== 'none' && (
+            <div>
+              <label htmlFor="holeDiameter" className="block text-sm font-medium text-gray-600 mb-1">
+                Hole Diameter (mm)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  id="holeDiameter"
+                  value={settings.holeDiameterMm}
+                  onChange={(e) => onSettingsChange({ holeDiameterMm: parseFloat(e.target.value) || 0 })}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  step="0.5"
+                  min="1"
+                />
+                <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm text-gray-500">mm</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

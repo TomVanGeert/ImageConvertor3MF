@@ -1,40 +1,81 @@
-// ImageConverterPage.tsx
+// src/app/ImageConvertor/page.tsx
+
 'use client';
 
-// --- React and Library Imports ---
+// --- (Keep all imports the same) ---
 import React, { useState, useRef, useEffect } from "react";
 import JSZip from 'jszip';
-
-// --- Component Imports ---
 import Dropzone from "./components/Dropzone";
 import CanvasPreview from "./components/CanvasPreview";
 import SettingsPanel from "./components/SettingsPanel";
-
-// --- Hook Imports ---
 import { useCanvasSizing } from "./hooks/useCanvasSizing";
 import { useImageProcessor } from "./hooks/useImageProcessor";
-
-// --- Utility and Type Imports ---
 import { generateBambu3mf } from "./lib/threeMFGeneratorBambu";
 import { PREDEFINED_TARGETS } from "./lib/constants";
-import { Settings } from "./lib/types";
+import { Settings, HolePosition } from "./lib/types";
 
-// --- CONFIGURATION CONSTANT ---
-// Set the maximum dimension (width or height) for the image processing.
-// This directly impacts the resolution and detail of the final 3D model.
-// - Lower values (e.g., 512) are much faster to process and export.
-// - Higher values (e.g., 2048) are more detailed but can be very slow.
+
+// --- (Keep punchHoleInHeightmap helper function the same) ---
+const punchHoleInHeightmap = (
+  heightmap: number[][],
+  settings: {
+    holePosition: HolePosition;
+    holeDiameterMm: number;
+    targetWidthMm: number;
+  }
+): number[][] => {
+  if (settings.holePosition === 'none') {
+    return heightmap;
+  }
+
+  const height = heightmap.length;
+  if (height === 0) return heightmap;
+  const width = heightmap[0].length;
+  if (width === 0) return heightmap;
+
+  const pixelPerMm = width / settings.targetWidthMm;
+  const holeRadiusPx = (settings.holeDiameterMm / 2) * pixelPerMm;
+  const paddingPx = 3 * pixelPerMm; // 3mm padding from the edge
+
+  let centerX: number;
+  const centerY = paddingPx + holeRadiusPx;
+
+  switch (settings.holePosition) {
+    case 'top-left':
+      centerX = paddingPx + holeRadiusPx;
+      break;
+    case 'top-right':
+      centerX = width - paddingPx - holeRadiusPx;
+      break;
+    case 'top-middle':
+    default:
+      centerX = width / 2;
+      break;
+  }
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+      if (distance <= holeRadiusPx) {
+        // --- THIS IS THE CRITICAL CHANGE ---
+        // Instead of setting to 0, use -1 to signal a true hole.
+        heightmap[y][x] = -1;
+      }
+    }
+  }
+
+  return heightmap;
+};
+
 const PROCESSING_RESOLUTION = 1024;
 
 export default function ImageConverterPage() {
-  // --- State Management ---
+  // --- (Keep all state and refs the same, including new settings defaults) ---
   const [image, setImage] = useState<string | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [aspectRatio, setAspectRatio] = useState(1);
   const [isControlsVisible, setIsControlsVisible] = useState(false);
-
-  // Settings state no longer includes processingResolution
   const [settings, setSettings] = useState<Omit<Settings, 'processingResolution'>>({
     conversionMode: 'brightness',
     brightnessThreshold: 50,
@@ -47,56 +88,84 @@ export default function ImageConverterPage() {
     detailHeight: 0.2,
     targetWidthMm: 100,
     targetHeightMm: 100,
-    useWidthInput: true
+    useWidthInput: true,
+    holePosition: 'none',
+    holeDiameterMm: 5,
   });
-
-  // State for the calculated processing dimensions, derived from the constant above
   const [processingWidth, setProcessingWidth] = useState(0);
   const [processingHeight, setProcessingHeight] = useState(0);
-
-  // --- Refs ---
   const imgRef = useRef<HTMLImageElement>(null);
   const displayCanvasRef = useRef<HTMLCanvasElement>(null);
   const exportCanvasRef = useRef<HTMLCanvasElement>(null);
-
-  // --- Custom Hooks ---
   const { displayWidth, displayHeight, originalWidth, originalHeight } = useCanvasSizing(imgRef, imageLoaded);
-  const processedImageData = useImageProcessor(
-    imgRef,
-    imageLoaded,
-    processingWidth,
-    processingHeight,
-    settings
-  );
+  const processedImageData = useImageProcessor(imgRef, imageLoaded, processingWidth, processingHeight, settings);
 
-  // --- Effect to calculate processing dimensions based on the constant ---
+  // --- (Keep useEffect for processing dimensions) ---
   useEffect(() => {
     if (!imageLoaded || !originalWidth || !aspectRatio) return;
-
-    // If the image is already smaller than the target resolution, use its original size to avoid upscaling
     if (Math.max(originalWidth, originalHeight) <= PROCESSING_RESOLUTION) {
       setProcessingWidth(originalWidth);
       setProcessingHeight(originalHeight);
       return;
     }
-
-    // Otherwise, scale it down to the target resolution while maintaining aspect ratio
-    if (aspectRatio > 1) { // Landscape image
+    if (aspectRatio > 1) {
       setProcessingWidth(PROCESSING_RESOLUTION);
       setProcessingHeight(Math.round(PROCESSING_RESOLUTION / aspectRatio));
-    } else { // Portrait or square image
+    } else {
       setProcessingHeight(PROCESSING_RESOLUTION);
       setProcessingWidth(Math.round(PROCESSING_RESOLUTION * aspectRatio));
     }
   }, [imageLoaded, originalWidth, originalHeight, aspectRatio]);
 
-  // --- Effect to draw processed data to both canvases ---
+
+  // --- START: NEW CENTRALIZED DRAWING LOGIC ---
+
+  const drawHoleVisualizer = (
+    ctx: CanvasRenderingContext2D,
+    canvasW: number,
+    modelW: number,
+    holePos: HolePosition,
+    holeDia: number
+  ) => {
+    if (!canvasW || !modelW) return;
+
+    const pixelPerMm = canvasW / modelW;
+    const holeRadiusPx = (holeDia / 2) * pixelPerMm;
+    const paddingPx = 3 * pixelPerMm; // 3mm padding from the edge
+
+    let cx: number;
+    const cy = paddingPx + holeRadiusPx;
+
+    switch (holePos) {
+      case 'top-left':
+        cx = paddingPx + holeRadiusPx;
+        break;
+      case 'top-right':
+        cx = canvasW - paddingPx - holeRadiusPx;
+        break;
+      case 'top-middle':
+      default:
+        cx = canvasW / 2;
+        break;
+    }
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, holeRadiusPx, 0, 2 * Math.PI);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  };
+
+  // This effect now handles ALL drawing on the display canvas
   useEffect(() => {
     const displayCanvas = displayCanvasRef.current;
     const exportCanvas = exportCanvasRef.current;
     if (!processedImageData || !displayCanvas || !exportCanvas) return;
 
-    // 1. Draw to the hidden, full-resolution export canvas
+    // 1. Draw to the hidden, full-resolution export canvas (unchanged)
     const exportCtx = exportCanvas.getContext('2d');
     if (exportCtx) {
       exportCanvas.width = processingWidth;
@@ -104,25 +173,42 @@ export default function ImageConverterPage() {
       exportCtx.putImageData(processedImageData, 0, 0);
     }
 
-    // 2. Draw a scaled version to the visible display canvas
+    // 2. Draw everything to the visible display canvas
     const displayCtx = displayCanvas.getContext('2d');
     if (displayCtx) {
       createImageBitmap(processedImageData).then(bitmap => {
-        if (displayCanvasRef.current) {
+        if (displayCanvasRef.current) { // Check ref is still valid
           const currentDisplayCanvas = displayCanvasRef.current;
           currentDisplayCanvas.width = displayWidth;
           currentDisplayCanvas.height = displayHeight;
           const ctx = currentDisplayCanvas.getContext('2d');
           if (ctx) {
+            // Step A: Clear the canvas
             ctx.clearRect(0, 0, displayWidth, displayHeight);
+            // Step B: Draw the processed image
             ctx.drawImage(bitmap, 0, 0, displayWidth, displayHeight);
+            // Step C: If a hole is selected, draw the visualizer on top
+            if (settings.holePosition !== 'none') {
+              drawHoleVisualizer(
+                ctx,
+                displayWidth,
+                settings.targetWidthMm,
+                settings.holePosition,
+                settings.holeDiameterMm
+              );
+            }
           }
         }
       });
     }
-  }, [processedImageData, displayWidth, displayHeight, processingWidth, processingHeight]);
+    // Add `settings` to dependency array to re-run on any setting change
+  }, [processedImageData, displayWidth, displayHeight, processingWidth, processingHeight, settings]);
 
-  // --- Event Handlers ---
+  // --- END: NEW CENTRALIZED DRAWING LOGIC ---
+
+
+  // --- (Keep all event handlers: handleDrop, handleImageLoad, etc.) ---
+  // ... (no changes needed in the handler functions themselves) ...
   const handleDrop = (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (file) {
@@ -153,13 +239,14 @@ export default function ImageConverterPage() {
         setSettings(s => ({ ...s, targetWidthMm: s.targetHeightMm * aspectRatio }));
       }
     }
-  }, [aspectRatio, imageLoaded]);
+  }, [aspectRatio, imageLoaded, settings.targetWidthMm, settings.targetHeightMm, settings.useWidthInput]); // Make dependencies more specific
 
   const handleSettingsChange = (newSettings: Partial<Settings>) => {
     setSettings(prev => ({ ...prev, ...newSettings }));
   };
 
   const handleExport3MF = async () => {
+    // (This function remains unchanged and will work correctly)
     if (!exportCanvasRef.current || !processingWidth) {
       alert("Export canvas is not ready. Please wait for the image to process.");
       return;
@@ -168,33 +255,30 @@ export default function ImageConverterPage() {
     try {
       const ctx = exportCanvasRef.current.getContext('2d', { willReadFrequently: true });
       if (!ctx) throw new Error("Could not get canvas context for export.");
-
       const imageData = ctx.getImageData(0, 0, processingWidth, processingHeight);
-
-      const heightmap: number[][] = [];
+      let heightmap: number[][] = [];
       for (let y = 0; y < processingHeight; y++) {
         heightmap[y] = [];
         for (let x = 0; x < processingWidth; x++) {
           heightmap[y][x] = imageData.data[(y * processingWidth + x) * 4];
         }
       }
-
+      const modifiedHeightmap = punchHoleInHeightmap(heightmap, {
+        holePosition: settings.holePosition,
+        holeDiameterMm: settings.holeDiameterMm,
+        targetWidthMm: settings.targetWidthMm,
+      });
       const archiveContent = generateBambu3mf(
-        heightmap,
+        modifiedHeightmap,
         { baseHeight: settings.baseHeight, detailHeight: settings.detailHeight },
         { width: settings.targetWidthMm, height: settings.targetHeightMm }
       );
       if (!archiveContent) throw new Error("Failed to generate 3MF model data.");
-
       const zip = new JSZip();
       for (const [filePath, fileContent] of Object.entries(archiveContent)) {
         zip.file(filePath, fileContent);
       }
-      const blob = await zip.generateAsync({
-        type: "blob",
-        mimeType: "application/vnd.ms-pki.3dmanufacturing",
-        compression: "DEFLATE"
-      });
+      const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.ms-pki.3dmanufacturing", compression: "DEFLATE" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -210,6 +294,7 @@ export default function ImageConverterPage() {
       setIsExporting(false);
     }
   };
+
 
   return (
     <main className="flex flex-col items-center p-4 sm:p-6 space-y-6 w-full">
@@ -233,8 +318,9 @@ export default function ImageConverterPage() {
               isExporting={isExporting}
               onOpenSettings={() => setIsControlsVisible(true)}
               onExport={handleExport3MF}
+            // --- REMOVED hole visualization props ---
             />
-            {/* This hidden canvas is now sized to the PROCESSING_RESOLUTION */}
+            {/* Hidden canvas remains the same */}
             <canvas
               ref={exportCanvasRef}
               style={{ display: 'none' }}
@@ -242,6 +328,7 @@ export default function ImageConverterPage() {
             />
           </div>
 
+          {/* SettingsPanel call remains the same */}
           {isControlsVisible && (
             <SettingsPanel
               settings={settings}
