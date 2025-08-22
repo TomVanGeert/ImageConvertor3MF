@@ -1,34 +1,34 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+// src/app/layout.tsx
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css'; // Make sure this is imported
+import { Header } from './components/shared/Header';
+import { Footer } from './components/shared/Footer';
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "Picture to 3d print",
-  description: "Convert images to black and white 3D print models",
+ title: 'Keychain Forge - Custom 3D Printed Keychains',
+ description: 'Turn any image into a high-quality, full-color 3D printed keychain. The perfect personalized gift.',
 };
 
 export default function RootLayout({
-  children,
+ children,
 }: Readonly<{
-  children: React.ReactNode;
+ children: React.ReactNode;
 }>) {
-  return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
-    </html>
-  );
+ return (
+   // The <html> and <body> tags must be structured like this,
+   // with no comments or newlines between them.
+   <html lang="en" className="dark" suppressHydrationWarning>
+     <body className={`${inter.className} bg-background text-foreground`}>
+       <div className="relative flex min-h-screen flex-col">
+         <Header />
+         <main className="flex-1">{children}</main>
+         <Footer />
+       </div>
+     </body>
+   </html>
+ );
 }
