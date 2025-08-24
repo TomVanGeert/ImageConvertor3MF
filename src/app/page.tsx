@@ -1,3 +1,5 @@
+
+
 // src/app/page.tsx
 import Link from 'next/link';
 import Image from 'next/image';
@@ -40,7 +42,7 @@ export default function HomePage() {
         <div className="relative mx-auto max-w-5xl overflow-hidden rounded-2xl border shadow-2xl">
           {/* TODO: Replace with a high-quality photo of your keychains */}
           <Image
-            src="/Logo.jpg"
+            src="/Logo-light.png"
             alt="Showcase of various 3D printed keychains"
             width={1200}
             height={600}

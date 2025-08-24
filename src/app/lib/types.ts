@@ -22,3 +22,18 @@ export type Settings = {
    holePosition: HolePosition;
    holeDiameterMm: number;
 };
+
+export type CartItem = {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;    // add this
+  previewUrl: string; // URL of the generated image
+};
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  password: string; // hashed password
+}

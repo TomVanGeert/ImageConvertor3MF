@@ -1,34 +1,27 @@
-// src/app/layout.tsx
-
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css'; // Make sure this is imported
+import "./globals.css";
+import { ReactNode } from "react";
+//import { Navbar } from "./components/Navbar"; // import the client component
 import { Header } from './components/shared/Header';
 import { Footer } from './components/shared/Footer';
 
-const inter = Inter({ subsets: ['latin'] });
-
-export const metadata: Metadata = {
- title: 'Keychain Forge - Custom 3D Printed Keychains',
- description: 'Turn any image into a high-quality, full-color 3D printed keychain. The perfect personalized gift.',
-};
-
-export default function RootLayout({
- children,
-}: Readonly<{
- children: React.ReactNode;
-}>) {
- return (
-   // The <html> and <body> tags must be structured like this,
-   // with no comments or newlines between them.
-   <html lang="en" className="dark" suppressHydrationWarning>
-     <body className={`${inter.className} bg-background text-foreground`}>
-       <div className="relative flex min-h-screen flex-col">
-         <Header />
-         <main className="flex-1">{children}</main>
-         <Footer />
-       </div>
-     </body>
-   </html>
- );
+// export default function RootLayout({ children }: { children: ReactNode }) {
+//   return (
+//     <html lang="en">
+//       <body className="min-h-screen bg-gray-50">
+//         <Navbar />
+//         <main className="max-w-6xl mx-auto p-6">{children}</main>
+//       </body>
+//     </html>
+//   );
+// }
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body className="bg-background text-foreground">
+        <Header />
+        <main>{children}</main>
+        <Footer />
+      </body>
+    </html>
+  );
 }
