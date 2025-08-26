@@ -1,27 +1,37 @@
-import fs from "fs";
-import path from "path";
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createSession } from "../sessions/route";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyPassword, generateToken } from "../../../lib/serverUtils";
 
-const usersFile = path.join(process.cwd(), "data", "users.json");
+// Use same in-memory DB as above
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  sessionToken?: string;
+}
 
-export async function POST(req: Request) {
-  const { email, password }: { email: string; password: string } = await req.json();
+const users: User[] = [];
 
-  if (!email || !password) {
-    return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+export async function POST(req: NextRequest) {
+  try {
+    const { email, password } = await req.json();
+    if (!email || !password) return NextResponse.json({ message: "Missing fields" }, { status: 400 });
+
+    const user = users.find(u => u.email === email);
+    if (!user) return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
+
+    const isValid = await verifyPassword(password, user.passwordHash);
+    if (!isValid) return NextResponse.json({ message: "Invalid email or password" }, { status: 401 });
+
+    const token = generateToken();
+    user.sessionToken = token;
+
+    const response = NextResponse.json({ message: "Login successful", user: { id: user.id, name: user.name, email: user.email } });
+    response.cookies.set("session", token, { httpOnly: true, path: "/" });
+
+    return response;
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ message: "Login failed" }, { status: 500 });
   }
-
-  const users = JSON.parse(fs.readFileSync(usersFile, "utf8") || "[]");
-  const user = users.find((u: any) => u.email === email && u.password === password);
-
-  if (!user) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
-
-  const token = createSession(user.id);
-
-  const res = NextResponse.json({ message: "Logged in", user: { id: user.id, name: user.name, email: user.email } });
-  res.cookies.set("sessionToken", token, { path: "/", httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production" });
-
-  return res;
 }

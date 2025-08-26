@@ -1,8 +1,7 @@
-// hooks/useImageProcessor.ts
 'use client';
 
 import { useState, useEffect, RefObject } from 'react';
-import { rgbToHsl, hexToRgb } from '../lib/utils';
+import { rgbToHsl, hexToRgb } from '../lib/browserUtils';
 import { PREDEFINED_TARGETS } from '../lib/constants';
 import { Settings } from '../lib/types';
 
@@ -23,22 +22,19 @@ function applySmoothingFilter(imageData: ImageData, width: number, height: numbe
                 }
             }
             const newColor = blackCount > 4 ? 0 : 255;
-            dstData[i] = newColor; dstData[i + 1] = newColor; dstData[i + 2] = newColor; dstData[i + 3] = 255;
+            dstData[i] = dstData[i + 1] = dstData[i + 2] = newColor;
+            dstData[i + 3] = 255;
         }
     }
     return new ImageData(dstData, width, height);
-};
+}
 
-/**
-* Processes an image based on settings and returns the resulting ImageData.
-* It performs all operations on an in-memory canvas at a specific processing resolution.
-*/
 export function useImageProcessor(
     imgRef: RefObject<HTMLImageElement | null>,
     imageLoaded: boolean,
     processingWidth: number,
     processingHeight: number,
-    settings: Omit<Settings, 'processingResolution'> // Note: The setting is no longer passed in
+    settings: Omit<Settings, 'processingResolution'>
 ): ImageData | null {
     const [processedImageData, setProcessedImageData] = useState<ImageData | null>(null);
     const { conversionMode, brightnessThreshold, targetColorIndex, hueTolerance, saturationTolerance, lightnessTolerance, enableSmoothing } = settings;
@@ -55,16 +51,14 @@ export function useImageProcessor(
         const ctx = offscreenCanvas.getContext("2d", { willReadFrequently: true });
         if (!ctx) return;
 
-        // Draw the original image scaled down to the processing resolution
         ctx.drawImage(imgRef.current, 0, 0, processingWidth, processingHeight);
-
         let imageData = ctx.getImageData(0, 0, processingWidth, processingHeight);
         let data = imageData.data;
 
         let targetHsl = { h: 0, s: 0, l: 0 };
         if (conversionMode === 'color') {
             const targetRgb = hexToRgb(PREDEFINED_TARGETS[targetColorIndex].hex);
-            if (targetRgb) { targetHsl = rgbToHsl(targetRgb.r, targetRgb.g, targetRgb.b); }
+            if (targetRgb) targetHsl = rgbToHsl(targetRgb.r, targetRgb.g, targetRgb.b);
         }
 
         for (let i = 0; i < data.length; i += 4) {
@@ -83,13 +77,11 @@ export function useImageProcessor(
             data[i] = data[i + 1] = data[i + 2] = colorValue;
         }
 
-        let finalImageData = imageData;
         if (enableSmoothing) {
-            finalImageData = applySmoothingFilter(imageData, processingWidth, processingHeight);
+            imageData = applySmoothingFilter(imageData, processingWidth, processingHeight);
         }
 
-        setProcessedImageData(finalImageData);
-
+        setProcessedImageData(imageData);
     }, [imageLoaded, imgRef, processingWidth, processingHeight, settings]);
 
     return processedImageData;

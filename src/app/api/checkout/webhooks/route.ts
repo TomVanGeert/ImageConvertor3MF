@@ -1,3 +1,4 @@
+// src/app/api/checkout/webhooks/route.ts
 import Stripe from "stripe";
 import { POST as saveOrder } from "../route";
 
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
 
-    // 🔑 Fetch line items with expanded product info
+    // Fetch line items with expanded product info
     const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
       limit: 100,
       expand: ["data.price.product"],
@@ -39,7 +40,6 @@ export async function POST(req: Request) {
     const cartItems = lineItems.data.map((item) => {
       let imageUrl = "";
 
-      // Ensure product is fully expanded
       if (item.price?.product && isStripeProduct(item.price.product)) {
         imageUrl = item.price.product.images?.[0] || "";
       }
@@ -53,7 +53,6 @@ export async function POST(req: Request) {
       };
     });
 
-    // ✅ Customer info is in session.customer_details
     const shipping = (session as any).shipping?.address || {};
 
     const order = {
@@ -68,13 +67,17 @@ export async function POST(req: Request) {
       createdAt: new Date().toISOString(),
     };
 
-    // Save the order into orders.json
-    await saveOrder(
-      new Request(`${process.env.NEXT_PUBLIC_BASE_URL}`, {
-        method: "POST",
-        body: JSON.stringify(order),
-      })
-    );
+    // Save order in database via your API route
+    try {
+      await saveOrder(
+        new Request(`${process.env.NEXT_PUBLIC_BASE_URL}/api/checkout`, {
+          method: "POST",
+          body: JSON.stringify(order),
+        })
+      );
+    } catch (err) {
+      console.error("Failed to save order in DB:", err);
+    }
   }
 
   return new Response(JSON.stringify({ received: true }), { status: 200 });

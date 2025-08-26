@@ -27,8 +27,8 @@ export type CartItem = {
   id: string;
   name: string;
   price: number;
-  quantity: number;    // add this
-  previewUrl: string; // URL of the generated image
+  quantity: number;
+  userId?: string;
 };
 
 export interface User {

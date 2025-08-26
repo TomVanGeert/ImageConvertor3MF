@@ -12,6 +12,7 @@ import { PREDEFINED_TARGETS } from "../lib/constants";
 import { Settings, HolePosition } from "../lib/types";
 import { useCart } from "../hooks/useCart";
 import { v4 as uuidv4 } from "uuid";
+import { useUser } from "../hooks/useUser";
 
 const PROCESSING_RESOLUTION = 1024;
 
@@ -91,6 +92,18 @@ export default function ImageConverterPage() {
   const processedImageData = useImageProcessor(imgRef, imageLoaded, processingWidth, processingHeight, settings);
 
   const { addItem, items, clear } = useCart();
+
+  // --- User authentication ---
+  const { user, isLoading: userLoading } = useUser();
+
+  if (!user && !userLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p>Please log in to create and save keychains.</p>
+      </div>
+    );
+  }
+
 
   // --- Canvas sizing ---
   useEffect(() => {
@@ -246,17 +259,19 @@ export default function ImageConverterPage() {
 
   // --- Add to cart ---
   const handleAddToCart = () => {
-    if (!exportCanvasRef.current) return alert("Generate keychain first");
-    const previewUrl = exportCanvasRef.current.toDataURL("image/png");
-    addItem({
-      id: uuidv4(),
-      name: keychainName,
-      price,
-      quantity: 1,
-      previewUrl,
-      imageUrl: previewUrl,
-    });
-  };
+  if (!user) return alert("Please log in to add items to cart");
+
+  if (!exportCanvasRef.current) return alert("Generate keychain first");
+  const previewUrl = exportCanvasRef.current.toDataURL("image/png");
+  addItem({
+    id: uuidv4(),
+    userId: user.id, // add userId here
+    name: keychainName,
+    price,
+    quantity: 1,
+  });
+};
+
 
   // --- Checkout all cart items ---
   const handleCheckout = async () => {

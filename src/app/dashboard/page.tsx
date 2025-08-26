@@ -1,58 +1,80 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-type Order = {
-  id: string;
-  customer: { name: string; email: string; address: string };
-  cartItems: { imageUrl: string; material: string; size: string; quantity: number; price: number }[];
-  total: number;
-  createdAt: string;
-};
+import { useState, useEffect } from "react";
 
 export default function DashboardPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch orders
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/orders");
+      if (!res.ok) throw new Error("Failed to load orders");
+      const data = await res.json();
+      setOrders(data.orders || []);
+    } catch (err) {
+      console.error(err);
+    }
+    setLoading(false);
+  };
+
+  // Create a new test order
+  const createTestOrder = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to create order");
+      await fetchOrders(); // refresh order list
+    } catch (err) {
+      console.error(err);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    fetch("/api/orders")
-      .then(res => res.json())
-      .then(setOrders);
+    fetchOrders();
   }, []);
 
   return (
-    <div className="container mx-auto py-16">
-      <h1 className="text-3xl font-bold mb-8">Orders Dashboard</h1>
-      {orders.length === 0 ? (
-        <p>No orders yet.</p>
-      ) : (
-        <div className="space-y-6">
-          {orders.map(order => (
-            <div key={order.id} className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-              <div className="flex justify-between mb-4">
-                <div>
-                  <p className="font-semibold text-lg">{order.customer.name}</p>
-                  <p>{order.customer.email}</p>
-                  <p>{order.customer.address}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold">€{order.total.toFixed(2)}</p>
-                  <p className="text-sm text-gray-500">{new Date(order.createdAt).toLocaleString()}</p>
-                </div>
-              </div>
+    <div className="max-w-3xl mx-auto py-8">
+      <h1 className="text-2xl font-bold mb-6">Your Orders</h1>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {order.cartItems.map((item, idx) => (
-                  <div key={idx} className="flex flex-col items-center">
-                    <img src={item.imageUrl} alt="Keychain" className="w-24 h-24 object-cover rounded border" />
-                    <p className="mt-2 font-semibold">{item.material} ({item.size})</p>
-                    <p>Qty: {item.quantity}</p>
-                    <p>€{(item.price * item.quantity).toFixed(2)}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+      <button
+        onClick={createTestOrder}
+        disabled={loading}
+        className="mb-6 rounded-lg bg-primary px-4 py-2 text-white hover:bg-primary/90 disabled:opacity-50"
+      >
+        {loading ? "Processing..." : "Create Test Order"}
+      </button>
+
+      {orders.length === 0 ? (
+        <p className="text-muted-foreground">No orders yet.</p>
+      ) : (
+        <ul className="space-y-4">
+          {orders.map((order) => (
+            <li
+              key={order.id}
+              className="rounded-lg border p-4 shadow-sm bg-white"
+            >
+              <p>
+                <span className="font-medium">Order ID:</span> {order.id}
+              </p>
+              <p>
+                <span className="font-medium">Total:</span> €{order.total}
+              </p>
+              <p>
+                <span className="font-medium">Status:</span> {order.status}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {new Date(order.createdAt).toLocaleString()}
+              </p>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );
